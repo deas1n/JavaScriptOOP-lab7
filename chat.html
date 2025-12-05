@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Чат</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        #messages {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 300px;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+        }
+        .message {
+            margin-bottom: 10px;
+        }
+        .message .timestamp {
+            font-size: 0.8em;
+            color: grey;
+        }
+    </style>
+</head>
+<body>
+    <h1>Чат</h1>
+    <div>
+        <label for="username">Ваше ім'я: </label>
+        <input type="text" id="username" placeholder="Введіть ім'я" />
+    </div>
+    <div>
+        <label for="message">Повідомлення: </label>
+        <input type="text" id="message" placeholder="Введіть повідомлення" />
+        <button onclick="sendMessage()">Send</button>
+    </div>
+    <div id="messages"></div>
+
+    <script>
+        let username = '';
+        let eventSource;
+
+        while (!username) {
+            username = prompt('Введіть ваше ім\'я:');
+        }
+
+        eventSource = new EventSource('/events');
+        eventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            displayMessage(data);
+        };
+
+        function displayMessage(data) {
+            const messagesDiv = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.innerHTML = `
+                <strong style="color: ${getColorForUser(data.username)}">${data.username}</strong>: 
+                ${data.message} <span class="timestamp">(${data.timestamp})</span>
+            `;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function getColorForUser(username) {
+            let hash = 0;
+            for (let i = 0; i < username.length; i++) {
+                hash = username.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const color = `hsl(${hash % 360}, 100%, 50%)`;
+            return color;
+        }
+
+        function sendMessage() {
+            const messageInput = document.getElementById('message');
+            const message = messageInput.value;
+
+            if (message.trim() !== '') {
+                fetch('/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, message })
+                });
+
+                messageInput.value = ''; 
+            }
+        }
+    </script>
+</body>
+</html>

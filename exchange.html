@@ -1,0 +1,130 @@
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Exchange Simulator</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; max-width: 700px; margin: 2rem auto; padding: 1rem; }
+    .card { border: 1px solid #ddd; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); margin-bottom: 1rem; }
+    button { padding: .6rem 1rem; font-size: 1rem; margin-right: .5rem; }
+    #log { height: 150px; overflow: auto; background:#fafafa; padding:.5rem; border-radius:6px; border:1px solid #eee; }
+  </style>
+</head>
+<body>
+  <h1>Моделювання біржі (WebSocket)</h1>
+
+  <div class="card">
+    <div><strong>Поточний курс:</strong> <span id="price">—</span> USD</div>
+    <div><strong>Ваш баланс (USD):</strong> <span id="usd">—</span></div>
+    <div><strong>Ваша криптовалюта (шт.):</strong> <span id="crypto">—</span></div>
+  </div>
+
+  <div class="card">
+    <button id="buy">Buy 1</button>
+    <button id="sell">Sell 1</button>
+    <button id="connectBtn" style="float:right">Reconnect</button>
+    <div style="clear:both"></div>
+  </div>
+
+  <div class="card">
+    <h3>Лог</h3>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    let ws;
+    let clientId = null;
+    let currentPrice = null;
+
+    const priceEl = document.getElementById('price');
+    const usdEl = document.getElementById('usd');
+    const cryptoEl = document.getElementById('crypto');
+    const logEl = document.getElementById('log');
+    const buyBtn = document.getElementById('buy');
+    const sellBtn = document.getElementById('sell');
+    const connectBtn = document.getElementById('connectBtn');
+
+    function log(msg) {
+      const p = document.createElement('div');
+      p.textContent = `${new Date().toLocaleTimeString()}: ${msg}`;
+      logEl.prepend(p);
+    }
+
+    function updateUIState(state) {
+      usdEl.textContent = (typeof state.usd === 'number') ? state.usd.toFixed(2) : state.usd;
+      cryptoEl.textContent = state.crypto;
+    }
+
+    function connect() {
+      if (ws && ws.readyState === WebSocket.OPEN) return;
+      const url = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host;
+      ws = new WebSocket(url);
+
+      ws.addEventListener('open', () => {
+        log('WebSocket: connected');
+      });
+
+      ws.addEventListener('message', (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'welcome') {
+            clientId = msg.clientId;
+            currentPrice = msg.price;
+            priceEl.textContent = currentPrice;
+            if (msg.state) updateUIState(msg.state);
+            log(`Connected as client #${clientId}. Price: ${currentPrice} USD`);
+          } else if (msg.type === 'price_update') {
+            currentPrice = msg.price;
+            priceEl.textContent = currentPrice;
+            log(`Price updated: ${currentPrice} USD`);
+          } else if (msg.type === 'state_update') {
+            if (msg.clientId === clientId) {
+              updateUIState({ usd: msg.usd, crypto: msg.crypto });
+              log(`State updated — USD: ${msg.usd.toFixed(2)}, Crypto: ${msg.crypto}`);
+            } else {
+            }
+          } else if (msg.type === 'error') {
+            log('Error from server: ' + msg.message);
+            alert('Server: ' + msg.message);
+          } else {
+            console.log('Unknown msg', msg);
+          }
+        } catch (e) {
+          console.error('Invalid message', ev.data);
+        }
+      });
+
+      ws.addEventListener('close', () => {
+        log('WebSocket: disconnected');
+      });
+
+      ws.addEventListener('error', (e) => {
+        console.error(e);
+        log('WebSocket: error');
+      });
+    }
+
+    buyBtn.addEventListener('click', () => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) { alert('Not connected'); return; }
+      ws.send(JSON.stringify({ type: 'buy' }));
+      log('Sent: BUY 1');
+    });
+
+    sellBtn.addEventListener('click', () => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) { alert('Not connected'); return; }
+      ws.send(JSON.stringify({ type: 'sell' }));
+      log('Sent: SELL 1');
+    });
+
+    connectBtn.addEventListener('click', () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+        setTimeout(connect, 300);
+      } else {
+        connect();
+      }
+    });
+
+    connect();
+  </script>
+</body>
+</html>
